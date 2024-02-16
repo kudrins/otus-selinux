@@ -1,0 +1,54 @@
+---
+- name: start VM 
+  hosts: localhost
+  vars_files: vars.yml
+  become: false
+  gather_facts: false
+  collections:
+    - community.vmware
+  tasks:
+  - name: deploy VM
+    vmware_guest: 
+      hostname: "{{ vcenter_hostname }}"
+      username: "{{ vcenter_username }}"
+      password: "{{ vcenter_password }}"
+      validate_certs: False
+      datacenter: Datacenter
+      datastore: datastore_6TB
+      folder: centos
+      template: t_centos8
+      name: centos8-se
+      hardware:
+        nested_virt: true
+        memory_mb: 2048
+      networks:
+        - name: VMs11
+          ip: "10.100.11.105"
+          netmask: "255.255.255.0"
+          gateway: "10.100.11.254"
+      customization:
+        hostname: "centos-se"
+        dns_servers: [10.100.11.200]
+      state: powered-on
+      wait_for_ip_address: true
+    register: deploy
+    delegate_to: localhost
+    tags:
+    - install
+- name: VM configuration
+  hosts: centos8se
+  become: true 
+  gather_facts: false
+  tasks:
+  - name: enable selinux, disable firewalld, install ang configure nginx
+    shell: "{{item}}"
+    with_items:
+      - sed -i 's/^SELINUX=.*/SELINUX=enforcing/g' /etc/selinux/config
+      - setenforce 1
+      - systemctl stop firewalld
+      - systemctl disable firewalld
+      - yum install -y nginx
+      - sed -i '/listen       80 default_server;/a listen       8092;' /etc/nginx/nginx.conf
+  tags:
+  - configuration
+ 
